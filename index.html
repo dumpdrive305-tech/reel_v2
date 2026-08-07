@@ -537,6 +537,15 @@
         <div class="mode-btn-desc">Clear cache & rescan</div>
       </div>
     </button>
+    <button class="mode-btn refresh" onclick="closeModePicker(); checkWebhook(activeSessionId)">
+      <div class="mode-btn-icon">
+        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <div class="mode-btn-text">
+        <div class="mode-btn-label">Check Webhook</div>
+        <div class="mode-btn-desc">Why aren't new videos showing up?</div>
+      </div>
+    </button>
     <button class="mode-btn del" onclick="closeModePicker(); deleteSession(activeSessionId)">
       <div class="mode-btn-icon">
         <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
@@ -977,6 +986,36 @@ async function shareSession(id) {
   }
 }
 
+// ── DIAGNOSE: why aren't uploaded videos showing up? ──
+async function checkWebhook(id) {
+  const s = getSession(id);
+  if (!s) return;
+  try {
+    const { info } = await apiCall('webhook-status', { botToken: s.token });
+    const expectedUrl = `${WORKER_URL}/webhook/${s.token}`;
+    const isCorrect = info.url === expectedUrl;
+    const lines = [
+      `Webhook URL set: ${info.url || '(none — this is the problem)'}`,
+      isCorrect ? '✓ Points to the right place' : '✗ Wrong URL — will fix now',
+      info.last_error_message ? `Last error from Telegram: ${info.last_error_message}` : '',
+      `Pending updates queued: ${info.pending_update_count}`
+    ].filter(Boolean).join('\n');
+
+    if (!isCorrect) {
+      const hash = await sha256(currentUser.password);
+      const uname = currentUser.isAdmin ? '__admin__' : currentUser.username;
+      await apiCall('register-webhook', { username: uname, hash, botToken: s.token });
+      alert(lines + '\n\nFixed — try uploading a video again now.');
+    } else {
+      alert(lines + (info.pending_update_count > 0
+        ? '\n\nUpdates are queued but not delivered — this usually clears itself in a few seconds; try Refresh after that.'
+        : '\n\nThis looks correctly set up. If videos still aren\'t showing, double check the video was actually posted into THIS exact channel.'));
+    }
+  } catch(e) {
+    alert('Could not check webhook: ' + e.message);
+  }
+}
+
 function addSession() { showSettings(false); }
 
 // ── UPLOAD (via the bot already admin in the channel) ──
@@ -1296,6 +1335,9 @@ async function createGroup() {
     document.getElementById('inputGroupName').value = '';
     showHome();
     renderDrawer();
+    if (res.webhookWarning) {
+      alert('Group created, but webhook setup had an issue: ' + res.webhookWarning + '\nUse "Check Webhook" in the group menu to retry.');
+    }
   } catch(e) {
     errEl.textContent = 'Could not create group: ' + e.message;
     errEl.classList.add('visible');
