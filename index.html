@@ -1064,19 +1064,33 @@ async function handleUploadFile(event) {
           text.textContent = `Uploading ${file.name}… ${pct}%`;
         }
       };
-      xhr.onload = () => {
+      xhr.onload = async () => {
         try {
           const res = JSON.parse(xhr.responseText);
-          if (res.ok) resolve(); else reject(new Error(res.description || 'Upload failed'));
+          if (!res.ok) { reject(new Error(res.description || 'Upload failed')); return; }
+
+          // Telegram never sends a webhook update to a bot about its own
+          // message, so the webhook will never see this upload — add it
+          // ourselves using the data Telegram just handed back directly.
+          const msg = res.result;
+          const video = msg.video || msg.document;
+          const hash = await sha256(currentUser.password);
+          const uname = currentUser.isAdmin ? '__admin__' : currentUser.username;
+          await apiCall('add-video', {
+            username: uname, hash, chatId: s.chatId,
+            fileId: video.file_id, messageId: msg.message_id,
+            name: msg.caption || file.name.replace(/\.[^/.]+$/, ''),
+            date: msg.date
+          });
+          resolve();
         } catch(e) { reject(e); }
       };
       xhr.onerror = () => reject(new Error('Network error during upload'));
       xhr.send(form);
     });
 
-    text.textContent = 'Done! It\'ll show up here in a moment.';
-    setTimeout(() => { overlay.style.display = 'none'; }, 1200);
-    // The bot's webhook will add it to the KV list momentarily on its own.
+    text.textContent = 'Done!';
+    setTimeout(() => { overlay.style.display = 'none'; }, 800);
   } catch(e) {
     overlay.style.display = 'none';
     alert('Upload failed: ' + e.message);
