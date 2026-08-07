@@ -535,7 +535,7 @@
     <button class="mode-cancel" onclick="closeModePicker()">Cancel</button>
   </div>
 </div>
-<input type="file" id="uploadInput" accept="video/*" style="display:none" onchange="handleUploadFile(event)"/>
+<input type="file" id="uploadInput" style="display:none" onchange="handleUploadFile(event)"/>
 <div class="upload-progress-overlay" id="uploadProgressOverlay" style="display:none">
   <div class="upload-progress-box">
     <div id="uploadProgressText">Uploading…</div>
@@ -977,6 +977,10 @@ async function handleUploadFile(event) {
   const file = event.target.files[0];
   event.target.value = '';
   if (!file) return;
+  if (!file.type.startsWith('video/')) {
+    alert('That\'s not a video file — pick a video.');
+    return;
+  }
   const s = getSession(activeSessionId);
   if (!s) return;
 
