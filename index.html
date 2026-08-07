@@ -135,6 +135,10 @@
   .user-row-groups { margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; }
   .user-group-chip { background:rgba(46,204,113,0.12); color:#2ecc71; border:1px solid rgba(46,204,113,0.3); border-radius:999px; padding:4px 10px; font-size:12px; cursor:pointer; }
   .user-row-share-btn { margin-top:10px; width:100%; background:none; border:1px dashed var(--border); color:var(--muted); border-radius:10px; padding:8px; font-size:12px; cursor:pointer; }
+  .admin-settings-box { background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:16px; padding:16px; margin-bottom:24px; }
+  .user-row-expanded { padding-top:4px; }
+  .btn-save.small { padding:10px; font-size:13px; margin-top:8px; }
+  .user-row-delete-btn { margin-top:10px; width:100%; background:rgba(255,107,107,0.08); border:1px solid rgba(255,107,107,0.3); color:#ff6b6b; border-radius:10px; padding:8px; font-size:12px; cursor:pointer; }
   .session-actions { display:flex; gap:6px; }
   .session-btn { width:32px; height:32px; border-radius:9px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:background 0.15s; }
   .session-btn:active { background:rgba(255,255,255,0.1); }
@@ -384,7 +388,15 @@
       <div class="settings-title">Users</div>
     </div>
 
-    <div class="field-label">New Username</div>
+    <div class="admin-settings-box">
+      <div class="field-label">Change Your Admin Password</div>
+      <input class="field-input" id="adminOldPass" type="password" placeholder="current password" autocomplete="off"/>
+      <input class="field-input" id="adminNewPass" type="password" placeholder="new password" autocomplete="off" style="margin-top:8px"/>
+      <div class="settings-error" id="adminPassError"></div>
+      <button class="btn-save" style="margin-top:10px" onclick="changeAdminPassword()">Update Admin Password</button>
+    </div>
+
+    <div class="field-label" style="margin-top:28px">New Username</div>
     <input class="field-input" id="newUserUsername" type="text" placeholder="username" autocomplete="off" spellcheck="false" autocapitalize="none"/>
     <div class="field-label">Set Their Password</div>
     <input class="field-input" id="newUserPassword" type="text" placeholder="password" autocomplete="off" spellcheck="false"/>
@@ -844,8 +856,7 @@ function enterAdminPanel() {
       isAdmin: true
     }));
   } catch(e) {}
-  showHome();
-  renderDrawer();
+  showUsersPanel();
 }
 
 // ── SAVE SESSIONS BACK TO GITHUB / LOCAL ──
@@ -1122,9 +1133,79 @@ async function createUser() {
   }
 }
 
-async function loadUsersList() {
+async function changeAdminPassword() {
+  const oldPass = document.getElementById('adminOldPass').value;
+  const newPass = document.getElementById('adminNewPass').value;
+  const errEl = document.getElementById('adminPassError');
+  errEl.classList.remove('visible');
+  if (!oldPass || !newPass) { errEl.textContent = 'Fill in both fields.'; errEl.classList.add('visible'); return; }
+  if (newPass.length < 8) { errEl.textContent = 'New password needs 8+ characters.'; errEl.classList.add('visible'); return; }
+  try {
+    const oldHash = await sha256(oldPass);
+    if (oldHash !== await sha256(currentUser.password)) { errEl.textContent = 'Current password is wrong.'; errEl.classList.add('visible'); return; }
+    const newHash = await sha256(newPass);
+
+    // Every user's saved password is encrypted with the admin password —
+    // changing it means re-encrypting all of them with the new one.
+    const { users } = await apiCall('admin-list-users', { adminHash: oldHash });
+    const updatedUsers = [];
+    for (const u of users) {
+      if (!u.passwordEnc) continue;
+      try {
+        const plain = await decrypt(u.passwordEnc, oldPass);
+        const reEnc = await encrypt(plain, newPass);
+        updatedUsers.push({ username: u.username, passwordEnc: reEnc });
+      } catch(e) {}
+    }
+    await apiCall('admin-change-password', { oldHash, newHash, updatedUsers });
+    currentUser.password = newPass;
+    try {
+      localStorage.setItem('mr_saved_session', JSON.stringify({ username: '__admin__', password: newPass, isAdmin: true }));
+    } catch(e) {}
+    document.getElementById('adminOldPass').value = '';
+    document.getElementById('adminNewPass').value = '';
+    alert('Admin password updated.');
+    loadUsersList();
+  } catch(e) {
+    errEl.textContent = 'Error: ' + e.message;
+    errEl.classList.add('visible');
+  }
+}
+
+let expandedUser = null;
+
+function toggleUserRow(username) {
+  expandedUser = expandedUser === username ? null : username;
+  loadUsersList(true);
+}
+
+async function saveUserPassword(username) {
+  const input = document.getElementById('editPass_' + username);
+  const newPass = input.value;
+  if (!newPass || newPass.length < 4) { alert('Password needs 4+ characters.'); return; }
+  try {
+    const adminHash = await sha256(currentUser.password);
+    const hash = await sha256(newPass);
+    const passwordEnc = await encrypt(newPass, currentUser.password);
+    await apiCall('admin-update-user', { adminHash, username, hash, passwordEnc });
+    alert(`Password updated for @${username}.`);
+    loadUsersList();
+  } catch(e) { alert('Could not update: ' + e.message); }
+}
+
+async function deleteUser(username) {
+  if (!confirm(`Delete @${username} and all their group access? This can't be undone.`)) return;
+  try {
+    const adminHash = await sha256(currentUser.password);
+    await apiCall('admin-delete-user', { adminHash, username });
+    expandedUser = null;
+    loadUsersList();
+  } catch(e) { alert('Could not delete: ' + e.message); }
+}
+
+async function loadUsersList(skipLoadingFlash) {
   const list = document.getElementById('usersList');
-  list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px 0">Loading…</div>';
+  if (!skipLoadingFlash) list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px 0">Loading…</div>';
   try {
     const adminHash = await sha256(currentUser.password);
     const { users } = await apiCall('admin-list-users', { adminHash });
@@ -1137,17 +1218,28 @@ async function loadUsersList() {
       if (u.passwordEnc) {
         try { plainPassword = await decrypt(u.passwordEnc, currentUser.password); } catch(e) {}
       }
+      const isOpen = expandedUser === u.username;
       const groupChips = (u.sessions || []).map(s =>
-        `<span class="user-group-chip" onclick="adminSharePrompt('${escHtml(s.name)}','${s.token}','${s.chatId}')">${escHtml(s.name)}</span>`
+        `<span class="user-group-chip" onclick="event.stopPropagation();adminSharePrompt('${escHtml(s.name)}','${s.token}','${s.chatId}')">${escHtml(s.name)}</span>`
       ).join('') || '<span style="color:var(--muted)">no groups</span>';
+
       return `
         <div class="user-row">
-          <div class="user-row-top">
+          <div class="user-row-top" onclick="toggleUserRow('${u.username}')" style="cursor:pointer">
             <b>@${escHtml(u.username)}</b>
-            <span class="user-row-pass">pw: ${escHtml(plainPassword)}</span>
+            <span class="user-row-pass">${isOpen ? '' : 'pw: ' + escHtml(plainPassword)}</span>
           </div>
-          <div class="user-row-groups">${groupChips}</div>
-          <button class="user-row-share-btn" onclick="adminShareToUser('${escHtml(u.username)}')">+ Share a group with @${escHtml(u.username)}</button>
+          ${isOpen ? `
+            <div class="user-row-expanded" onclick="event.stopPropagation()">
+              <div class="field-label" style="margin-top:10px">Password</div>
+              <input class="field-input" id="editPass_${u.username}" type="text" value="${escHtml(plainPassword)}"/>
+              <button class="btn-save small" onclick="saveUserPassword('${u.username}')">Save Password</button>
+              <div class="field-label" style="margin-top:14px">Groups</div>
+              <div class="user-row-groups">${groupChips}</div>
+              <button class="user-row-share-btn" onclick="adminShareToUser('${u.username}')">+ Share a group with @${escHtml(u.username)}</button>
+              <button class="user-row-delete-btn" onclick="deleteUser('${u.username}')">Delete User</button>
+            </div>
+          ` : ''}
         </div>`;
     }));
     list.innerHTML = rows.join('');
