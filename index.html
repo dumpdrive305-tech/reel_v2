@@ -817,7 +817,7 @@ function logout() {
   currentUser = null;
   activeSessionId = null;
   playlist = [];
-  show('auth'); hide('home'); hide('settings'); hide('player');
+  show('auth'); hide('home'); hide('settings'); hide('player'); hide('adminUsers');
   document.getElementById('authUser').value = '';
   document.getElementById('authPass').value = '';
   document.getElementById('authError').classList.remove('visible');
@@ -1087,14 +1087,14 @@ function show(id) { document.getElementById(id).classList.remove('hidden'); }
 function hide(id) { document.getElementById(id).classList.add('hidden'); }
 
 function showHome() {
-  show('home'); hide('settings'); hide('player'); hide('auth');
+  show('home'); hide('settings'); hide('player'); hide('auth'); hide('adminUsers');
   document.getElementById('splashError').classList.remove('visible');
   
   document.getElementById('homeLoading').classList.remove('active');
 }
 
 function showSettings(isFirst) {
-  show('settings'); hide('home'); hide('player'); hide('auth');
+  show('settings'); hide('home'); hide('player'); hide('auth'); hide('adminUsers');
   document.getElementById('settingsError').classList.remove('visible');
   document.getElementById('settingsBack').style.visibility = isFirst ? 'hidden' : 'visible';
   document.getElementById('settingsTitle').textContent = 'Add Group';
@@ -1103,7 +1103,7 @@ function showSettings(isFirst) {
 
 // ── ADMIN: USERS PANEL ──
 function showUsersPanel() {
-  hide('home'); show('adminUsers');
+  hide('home'); hide('settings'); hide('player'); hide('auth'); hide('browse'); show('adminUsers');
   document.getElementById('newUserUsername').value = '';
   document.getElementById('newUserPassword').value = '';
   document.getElementById('newUserError').classList.remove('visible');
@@ -1462,7 +1462,7 @@ async function deleteAllVideos() {
 
 // ── PLAYER ──
 function launchPlayer() {
-  show('player'); hide('home'); hide('settings'); hide('auth');
+  show('player'); hide('home'); hide('settings'); hide('auth'); hide('adminUsers');
   loadVideoIntoSlot(videoA, currentIdx);
   videoA.play().catch(()=>{});
   showBuffering(videoA);
@@ -1643,7 +1643,7 @@ function setupTouch() {
 let browseItems = []; // raw list from Worker {fileId, name, date}
 
 async function openBrowse() {
-  show('browse'); hide('home'); hide('player'); hide('settings'); hide('auth');
+  show('browse'); hide('home'); hide('player'); hide('settings'); hide('auth'); hide('adminUsers');
   const s = getSession(activeSessionId);
   document.getElementById('browseTitleName').textContent = s ? s.name : 'Videos';
   document.getElementById('browseTitleSub').textContent  = 'Loading...';
