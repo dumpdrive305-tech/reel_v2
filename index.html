@@ -1455,7 +1455,7 @@ async function fetchVideos() {
 async function resolveFileId(base, item) {
   const r = await fetch(`${base}/getFile?file_id=${item.fileId}`);
   const d = await r.json();
-  if (!d.ok) return null;
+  if (!d.ok) { console.warn('getFile failed for', item.name, ':', d.description); return null; }
   const url = `https://api.telegram.org/file/bot${currentToken}/${d.result.file_path}`;
   return { url, name: item.name, fileId: item.fileId };
 }
@@ -1759,7 +1759,7 @@ async function browsePlayVideo(idx) {
   try {
     const r = await fetch(base + '/getFile?file_id=' + item.fileId);
     const d = await r.json();
-    if (!d.ok) throw new Error('Could not get file URL');
+    if (!d.ok) throw new Error(d.description || 'Could not get file URL');
     const url = 'https://api.telegram.org/file/bot' + currentToken + '/' + d.result.file_path;
 
     playlist   = [{ url, name: item.name, fileId: item.fileId }];
