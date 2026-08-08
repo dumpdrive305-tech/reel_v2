@@ -440,8 +440,8 @@
 
 <!-- ══ PLAYER ══ -->
 <div id="player" class="screen hidden">
-  <div class="video-slot" id="slotA"><video id="videoA" playsinline loop preload="auto"></video></div>
-  <div class="video-slot hidden" id="slotB"><video id="videoB" playsinline loop preload="auto"></video></div>
+  <div class="video-slot" id="slotA"></div>
+  <div class="video-slot hidden" id="slotB"></div>
   <div class="grad-top"></div>
   <div class="grad-bottom"></div>
   <div class="buffering" id="buffering"><div class="spinner"></div></div>
@@ -637,8 +637,7 @@ let totalFetched = 0;
 let currentToken  = '';
 let currentChatId = '';
 
-const videoA = document.getElementById('videoA');
-const videoB = document.getElementById('videoB');
+
 const slotA  = document.getElementById('slotA');
 const slotB  = document.getElementById('slotB');
 
@@ -1435,7 +1434,7 @@ async function fetchVideos() {
 
     setLabel(`Found ${items.length} videos, resolving…`);
     const shuffled = shuffle([...items]);
-    const FAST_START = 3;
+    const FAST_START = 1;
     const firstBatch = shuffled.slice(0, FAST_START);
     const rest = shuffled.slice(FAST_START);
     const firstVideos = [];
@@ -1460,10 +1459,11 @@ async function fetchVideos() {
     currentIdx = 0;
     totalFetched = firstVideos.length;
 
-    // Actually buffer these 3 (not just resolve their URL) so playback
-    // starts instantly with no spinner once the player opens.
+    // Actually buffer video #1 (not just resolve its URL) so playback
+    // starts instantly with no spinner. The rest buffer in the background
+    // via the shared pool right after launch — no separate preload step.
     setLabel('Buffering…');
-    await Promise.all(playlist.map((_, i) => waitForReady(preloadVideo(i))));
+    await waitForReady(getVideoEl(0));
 
     stopLoading();
     launchPlayer();
@@ -1535,9 +1535,14 @@ async function deleteCurrentVideo() {
   totalFetched = Math.max(0, totalFetched - 1);
   if (playlist.length === 0) { exitPlayer(); return; }
   if (currentIdx >= playlist.length) currentIdx = playlist.length - 1;
-  loadVideoIntoSlot(activeVid(), currentIdx);
-  activeVid().play().catch(()=>{});
+  Object.keys(videoPool).forEach(k => { videoPool[k].pause(); videoPool[k].removeAttribute('src'); videoPool[k].load(); videoPool[k].remove(); delete videoPool[k]; });
+  const v = getVideoEl(currentIdx);
+  v.style.display = ''; v.muted = isMuted;
+  activeSlot().appendChild(v);
+  smartFit(v);
+  v.play().catch(()=>{});
   updateUI();
+  preloadAhead();
 }
 
 async function deleteAllVideos() {
@@ -1557,20 +1562,77 @@ async function deleteAllVideos() {
 }
 
 
+// ── VIDEO POOL — one element per video, reused for both background
+// buffering AND actual playback. Whichever slot shows a video just moves
+// that same buffered element into itself — no second/duplicate fetch, so
+// nothing that was already buffered ever needs to re-download. ──
+const videoPool = {}; // idx -> <video> element that owns that video's buffer
+const PRELOAD_AHEAD = 5;
+
+function getVideoEl(idx) {
+  if (idx < 0 || idx >= playlist.length) return null;
+  if (videoPool[idx]) return videoPool[idx];
+  const v = document.createElement('video');
+  v.playsInline = true; v.loop = true; v.preload = 'auto'; v.muted = isMuted;
+  v.src = playlist[idx].url;
+  v.style.display = 'none';
+  document.body.appendChild(v);
+  v.load();
+  v.onloadedmetadata = () => smartFit(v);
+  videoPool[idx] = v;
+  return v;
+}
+
+function waitForReady(vid, timeoutMs = 8000) {
+  return new Promise(resolve => {
+    if (!vid) { resolve(); return; }
+    if (vid.readyState >= 3) { resolve(); return; }
+    let done = false;
+    const finish = () => { if (!done) { done = true; resolve(); } };
+    vid.addEventListener('canplaythrough', finish, { once: true });
+    vid.addEventListener('canplay', finish, { once: true });
+    setTimeout(finish, timeoutMs); // never block forever on a slow file
+  });
+}
+
+function cleanupPool() {
+  Object.keys(videoPool).forEach(k => {
+    const idx = parseInt(k, 10);
+    const v = videoPool[idx];
+    if (v.parentElement && v.parentElement.classList.contains('video-slot')) return; // on screen — never evict
+    if (idx < currentIdx - 1 || idx > currentIdx + PRELOAD_AHEAD) {
+      v.pause(); v.removeAttribute('src'); v.load(); v.remove();
+      delete videoPool[idx];
+    }
+  });
+}
+
+function preloadAhead() {
+  for (let i=1;i<=PRELOAD_AHEAD;i++) {
+    const idx = currentIdx+i; if (idx>=playlist.length) continue;
+    getVideoEl(idx);
+  }
+  cleanupPool();
+}
+
 // ── PLAYER ──
 function launchPlayer() {
   show('player'); hide('home'); hide('settings'); hide('auth'); hide('adminUsers');
-  loadVideoIntoSlot(videoA, currentIdx);
-  videoA.play().catch(()=>{});
-  showBuffering(videoA);
+  const v = getVideoEl(currentIdx);
+  v.style.display = ''; v.muted = isMuted;
+  activeSlot().appendChild(v);
+  smartFit(v);
+  v.play().catch(()=>{});
+  showBuffering(v);
   updateUI();
   preloadAhead();
   setupTouch();
 }
 
 function exitPlayer() {
-  videoA.pause(); videoB.pause();
-  videoA.src = ''; videoB.src = '';
+  Object.values(videoPool).forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); v.remove(); });
+  Object.keys(videoPool).forEach(k => delete videoPool[k]);
+  slotA.innerHTML = ''; slotB.innerHTML = '';
   if (browsePlayerActive) {
     browsePlayerActive = false;
     show('browse'); hide('player'); hide('home');
@@ -1579,17 +1641,9 @@ function exitPlayer() {
   }
 }
 
-function activeVid()    { return useSlotA ? videoA : videoB; }
-function inactiveVid()  { return useSlotA ? videoB : videoA; }
 function activeSlot()   { return useSlotA ? slotA  : slotB;  }
 function inactiveSlot() { return useSlotA ? slotB  : slotA;  }
-
-function loadVideoIntoSlot(vid, idx) {
-  if (idx < 0 || idx >= playlist.length) return;
-  vid.src = playlist[idx].url; vid.muted = isMuted; vid.load();
-  // Once metadata loads, decide cover vs contain based on aspect ratio
-  vid.onloadedmetadata = () => smartFit(vid);
-}
+function activeVid()    { return activeSlot().querySelector('video'); }
 
 function smartFit(vid) {
   if (!vid.videoWidth || !vid.videoHeight) return;
@@ -1610,15 +1664,18 @@ function navigate(dir) {
   if (next < 0) next = playlist.length - 1;
   if (next >= playlist.length) { showLoadMoreBar(); return; }
   isAnimating = true; currentIdx = next;
-  const incoming = inactiveVid(), inSlot = inactiveSlot(), outSlot = activeSlot();
-  loadVideoIntoSlot(incoming, currentIdx);
+  const incoming = getVideoEl(currentIdx), inSlot = inactiveSlot(), outSlot = activeSlot();
+  incoming.style.display = ''; incoming.muted = isMuted;
+  inSlot.appendChild(incoming);
   inSlot.classList.remove('hidden');
   inSlot.className  = `video-slot ${dir>0?'slide-in-up':'slide-in-down'}`;
   outSlot.className = `video-slot ${dir>0?'slide-out-up':'slide-out-down'}`;
+  incoming.currentTime = 0;
   incoming.play().catch(()=>{});
   showBuffering(incoming);
   setTimeout(() => {
-    activeVid().pause(); activeVid().src = '';
+    const outgoing = outSlot.querySelector('video');
+    if (outgoing) { outgoing.pause(); outgoing.style.display = 'none'; document.body.appendChild(outgoing); }
     outSlot.classList.add('hidden'); outSlot.className = 'video-slot hidden';
     inSlot.className = 'video-slot'; useSlotA = !useSlotA;
     isAnimating = false; updateUI(); preloadAhead();
@@ -1633,58 +1690,6 @@ function updateUI() {
   updateCountUI();
 }
 
-// ── PRELOAD POOL — actually buffers upcoming videos (hidden <video>
-// elements, not just link-prefetch) so swiping never shows a spinner ──
-const preloadPool = {}; // idx -> hidden <video> element buffering that url
-const PRELOAD_AHEAD = 5;
-
-function preloadVideo(idx) {
-  if (idx < 0 || idx >= playlist.length) return null;
-  if (preloadPool[idx]) return preloadPool[idx];
-  const v = document.createElement('video');
-  v.src = playlist[idx].url;
-  v.preload = 'auto';
-  v.muted = true;
-  v.style.display = 'none';
-  document.body.appendChild(v);
-  v.load();
-  preloadPool[idx] = v;
-  return v;
-}
-
-function waitForReady(vid, timeoutMs = 6000) {
-  return new Promise(resolve => {
-    if (!vid) { resolve(); return; }
-    if (vid.readyState >= 3) { resolve(); return; }
-    let done = false;
-    const finish = () => { if (!done) { done = true; resolve(); } };
-    vid.addEventListener('canplaythrough', finish, { once: true });
-    vid.addEventListener('canplay', finish, { once: true });
-    setTimeout(finish, timeoutMs); // never block forever on a slow file
-  });
-}
-
-function cleanupPreloadPool() {
-  Object.keys(preloadPool).forEach(k => {
-    const idx = parseInt(k, 10);
-    if (idx < currentIdx - 1 || idx > currentIdx + PRELOAD_AHEAD) {
-      const v = preloadPool[idx];
-      v.pause(); v.removeAttribute('src'); v.load(); v.remove();
-      delete preloadPool[idx];
-    }
-  });
-}
-
-function preloadAhead() {
-  for (let i=1;i<=PRELOAD_AHEAD;i++) {
-    const idx = currentIdx+i; if (idx>=playlist.length) continue;
-    preloadVideo(idx);
-  }
-  const nextIdx = currentIdx+1;
-  if (nextIdx < playlist.length) loadVideoIntoSlot(inactiveVid(), nextIdx);
-  cleanupPreloadPool();
-}
-
 function showBuffering(vid) {
   const buf = document.getElementById('buffering');
   const update = () => vid.readyState>=3 ? buf.classList.remove('visible') : buf.classList.add('visible');
@@ -1695,7 +1700,7 @@ function showBuffering(vid) {
 
 function toggleMute() {
   isMuted = !isMuted;
-  videoA.muted = videoB.muted = isMuted;
+  Object.values(videoPool).forEach(v => v.muted = isMuted);
   const ic = document.getElementById('iconMute');
   ic.innerHTML = isMuted
     ? `<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>`
@@ -1735,9 +1740,11 @@ function setupTouch() {
   },{passive:true});
   area.addEventListener('touchend',e=>{
     const dx=e.changedTouches[0].clientX-sx, dy=e.changedTouches[0].clientY-sy, dt=Date.now()-st;
-    if(Math.abs(dy)>Math.abs(dx) && Math.abs(dy)>40 && dt<600) {
+    const isSwipe = Math.abs(dy)>Math.abs(dx) && Math.abs(dy)>40 && dt<600;
+    if(isSwipe) {
       navigate(dy<0?1:-1);
-    } else if(Math.abs(dy)<20 && Math.abs(dx)<20 && dt<300) {
+    } else if(Math.abs(dx)<30 && Math.abs(dy)<30) {
+      // Anything that isn't a swipe and didn't drift far = a tap, regardless of duration
       const v=activeVid(); v.paused?v.play():v.pause();
       const f=document.getElementById('tapFlash'); f.classList.add('show'); setTimeout(()=>f.classList.remove('show'),150);
     }
@@ -1873,13 +1880,18 @@ async function browsePlayVideo(idx) {
     playlist   = [{ url, name: item.name, fileId: item.fileId }];
     currentIdx = 0;
     totalFetched = 1;
+    Object.values(videoPool).forEach(v => { v.pause(); v.removeAttribute('src'); v.load(); v.remove(); });
+    Object.keys(videoPool).forEach(k => delete videoPool[k]);
 
     // Override exitPlayer to go back to browse
     browsePlayerActive = true;
     show('player'); hide('browse');
-    loadVideoIntoSlot(videoA, 0);
-    videoA.play().catch(() => {});
-    showBuffering(videoA);
+    const v = getVideoEl(0);
+    v.style.display = ''; v.muted = isMuted;
+    activeSlot().appendChild(v);
+    smartFit(v);
+    v.play().catch(() => {});
+    showBuffering(v);
     updateUI();
   } catch(e) {
     alert('Could not play video: ' + e.message);
