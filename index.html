@@ -1415,17 +1415,20 @@ async function fetchVideos() {
     const firstBatch = shuffled.slice(0, FAST_START);
     const rest = shuffled.slice(FAST_START);
     const firstVideos = [];
+    const failReasons = [];
 
     for (let i = 0; i < firstBatch.length; i++) {
       setLabel(`Loading… ${i+1} / ${items.length}`);
       try {
         const v = await resolveFileId(base, firstBatch[i]);
-        if (v) firstVideos.push(v);
-      } catch { continue; }
+        if (v && !v.failed) firstVideos.push(v);
+        else if (v && v.failed) failReasons.push(v.reason);
+      } catch(e) { failReasons.push(e.message); }
     }
 
     if (firstVideos.length === 0) {
-      showSplashError('Could not load video URLs.\nFiles may be over 20MB (Telegram limit).');
+      const uniqueReasons = [...new Set(failReasons)].join('; ');
+      showSplashError('Could not load video URLs.\n' + (uniqueReasons || 'Unknown error — check the browser console.'));
       return;
     }
 
@@ -1441,7 +1444,7 @@ async function fetchVideos() {
         for (const item of rest) {
           try {
             const v = await resolveFileId(base, item);
-            if (!v) continue;
+            if (!v || v.failed) continue;
             playlist.push(v);
             totalFetched++;
             updateCountUI();
@@ -1455,7 +1458,7 @@ async function fetchVideos() {
 async function resolveFileId(base, item) {
   const r = await fetch(`${base}/getFile?file_id=${item.fileId}`);
   const d = await r.json();
-  if (!d.ok) { console.warn('getFile failed for', item.name, ':', d.description); return null; }
+  if (!d.ok) { return { failed: true, reason: d.description || 'unknown error' }; }
   const url = `https://api.telegram.org/file/bot${currentToken}/${d.result.file_path}`;
   return { url, name: item.name, fileId: item.fileId };
 }
