@@ -1492,13 +1492,13 @@ async function resolveFileId(base, item) {
   const r = await fetch(`${base}/getFile?file_id=${item.fileId}`);
   const d = await r.json();
   if (!d.ok) { return { failed: true, reason: d.description || 'unknown error' }; }
-  const url = `https://api.telegram.org/file/bot${currentToken}/${d.result.file_path}`;
+  const url = `https://api.telegram.org/file/bot${currentToken}/${d.result.file_path}?_=${Date.now()}`;
   return { url, name: item.name, fileId: item.fileId };
 }
 
 function updateCountUI() {
   const s = getSession(activeSessionId);
-  document.getElementById('playerCount').textContent  = `${currentIdx+1} / ${playlist.length}`;
+  document.getElementById('playerCount').textContent  = `${currentIdx+1} / ${totalAvailable || playlist.length}`;
   document.getElementById('playerSource').textContent = `${s?s.name:'Telegram'} \u2022 ${totalFetched}${totalAvailable?'/'+totalAvailable:''} loaded`;
 }
 
