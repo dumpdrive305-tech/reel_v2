@@ -375,7 +375,7 @@
     <div class="home-footer">
       <button class="btn-add-group" onclick="addSession()">
         <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Add Group
+        Add
       </button>
     </div>
   </div>
@@ -907,7 +907,7 @@ function renderDrawer() {
   if (sessions.length === 0) {
     list.innerHTML = `<div class="home-empty">
       <div class="home-empty-icon">🎬</div>
-      No groups yet.<br/>Tap Add Group to get started.
+      No groups yet.<br/>Tap Add to get started.
     </div>`;
     return;
   }
@@ -1113,7 +1113,25 @@ function refreshSession(id) {
 }
 
 async function deleteSession(id) {
-  if (!confirm('Remove this group?')) return;
+  const s = getSession(id);
+  if (!s) return;
+
+  if (currentUser.isAdmin) {
+    const wantsFullDelete = confirm(
+      `Delete "${s.name}"?\n\nOK = also permanently delete the actual channel on Telegram (removes it for everyone it's shared with, can't be undone).\nCancel = just remove it from your own list, channel stays on Telegram.`
+    );
+    if (wantsFullDelete) {
+      try {
+        const adminHash = await sha256(currentUser.password);
+        await apiCall('delete-channel', { adminHash, chatId: s.chatId });
+      } catch(e) {
+        alert('Could not delete the channel on Telegram: ' + e.message + '\nRemoving it from your list anyway.');
+      }
+    }
+  } else {
+    if (!confirm(`Remove "${s.name}" from your list? (This only removes it for you — the channel itself isn't touched.)`)) return;
+  }
+
   currentUser.sessions = currentUser.sessions.filter(s => s.id !== id);
   if (activeSessionId === id) activeSessionId = null;
   await persistSessions();
