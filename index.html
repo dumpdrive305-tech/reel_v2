@@ -1435,6 +1435,7 @@ async function fetchVideos() {
 
     setLabel(`Found ${items.length} videos, resolving…`);
     totalAvailable = items.length;
+    await new Promise(r => setTimeout(r, 700)); // let the count actually be readable before moving on
     const shuffled = shuffle([...items]);
     const FAST_START = 1;
     const firstBatch = shuffled.slice(0, FAST_START);
