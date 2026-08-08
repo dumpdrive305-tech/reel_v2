@@ -1456,10 +1456,10 @@ async function fetchVideos() {
 }
 
 async function resolveFileId(base, item) {
-  if (!item.messageId) return { failed: true, reason: 'This video has no messageId on file — try Refresh.' };
-  const hash = await sha256(currentUser.password);
-  const uname = currentUser.isAdmin ? '__admin__' : currentUser.username;
-  const url = `${WORKER_URL}/stream?username=${encodeURIComponent(uname)}&hash=${hash}&chatId=${encodeURIComponent(currentChatId)}&messageId=${encodeURIComponent(item.messageId)}`;
+  const r = await fetch(`${base}/getFile?file_id=${item.fileId}`);
+  const d = await r.json();
+  if (!d.ok) { return { failed: true, reason: d.description || 'unknown error' }; }
+  const url = `https://api.telegram.org/file/bot${currentToken}/${d.result.file_path}`;
   return { url, name: item.name, fileId: item.fileId };
 }
 
@@ -1758,7 +1758,8 @@ async function browsePlayVideo(idx) {
   if (!item) return;
 
   try {
-    const v = await resolveFileId(null, item);
+    const base = 'https://api.telegram.org/bot' + currentToken;
+    const v = await resolveFileId(base, item);
     if (v.failed) throw new Error(v.reason);
     const url = v.url;
 
