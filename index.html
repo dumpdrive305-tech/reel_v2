@@ -634,6 +634,7 @@ let isMuted = false;
 let isAnimating = false;
 let useSlotA = true;
 let totalFetched = 0;
+let totalAvailable = 0;
 let currentToken  = '';
 let currentChatId = '';
 
@@ -938,7 +939,7 @@ function quickPlay(id) {
   if (!s) return;
   currentToken  = s.token;
   currentChatId = s.chatId;
-  totalFetched = 0;
+  totalFetched = 0; totalAvailable = 0;
   playlist = [];
   startLoading();
   fetchVideos();
@@ -961,7 +962,7 @@ function closeModePicker() {
 
 function modePlay() {
   closeModePicker();
-  totalFetched = 0;
+  totalFetched = 0; totalAvailable = 0;
   playlist = [];
   startLoading();
   fetchVideos();
@@ -1109,7 +1110,7 @@ function refreshSession(id) {
   if (!s) return;
   currentToken  = s.token;
   currentChatId = s.chatId;
-  totalFetched  = 0;
+  totalFetched  = 0; totalAvailable = 0;
   showHome();
   startLoading();
   fetchVideos();
@@ -1433,6 +1434,7 @@ async function fetchVideos() {
     }
 
     setLabel(`Found ${items.length} videos, resolving…`);
+    totalAvailable = items.length;
     const shuffled = shuffle([...items]);
     const FAST_START = 1;
     const firstBatch = shuffled.slice(0, FAST_START);
@@ -1496,7 +1498,7 @@ async function resolveFileId(base, item) {
 function updateCountUI() {
   const s = getSession(activeSessionId);
   document.getElementById('playerCount').textContent  = `${currentIdx+1} / ${playlist.length}`;
-  document.getElementById('playerSource').textContent = `${s?s.name:'Telegram'} \u2022 ${totalFetched} loaded`;
+  document.getElementById('playerSource').textContent = `${s?s.name:'Telegram'} \u2022 ${totalFetched}${totalAvailable?'/'+totalAvailable:''} loaded`;
 }
 
 async function loadMoreVideos() { hideLoadMoreBar(); }
