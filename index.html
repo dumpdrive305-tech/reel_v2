@@ -1886,12 +1886,12 @@ async function browsePlayVideo(idx) {
     // Override exitPlayer to go back to browse
     browsePlayerActive = true;
     show('player'); hide('browse');
-    const v = getVideoEl(0);
-    v.style.display = ''; v.muted = isMuted;
-    activeSlot().appendChild(v);
-    smartFit(v);
-    v.play().catch(() => {});
-    showBuffering(v);
+    const v2 = getVideoEl(0);
+    v2.style.display = ''; v2.muted = isMuted;
+    activeSlot().appendChild(v2);
+    smartFit(v2);
+    v2.play().catch(() => {});
+    showBuffering(v2);
     updateUI();
   } catch(e) {
     alert('Could not play video: ' + e.message);
