@@ -1537,7 +1537,7 @@ async function deleteCurrentVideo() {
   if (currentIdx >= playlist.length) currentIdx = playlist.length - 1;
   Object.keys(videoPool).forEach(k => { videoPool[k].pause(); videoPool[k].removeAttribute('src'); videoPool[k].load(); videoPool[k].remove(); delete videoPool[k]; });
   const v = getVideoEl(currentIdx);
-  v.style.display = ''; v.muted = isMuted;
+  showInSlot(v); v.muted = isMuted;
   activeSlot().appendChild(v);
   smartFit(v);
   v.play().catch(()=>{});
@@ -1575,11 +1575,16 @@ function getVideoEl(idx) {
   const v = document.createElement('video');
   v.playsInline = true; v.loop = true; v.preload = 'auto'; v.muted = isMuted;
   v.src = playlist[idx].url;
-  v.style.display = 'none';
+  v.style.position = 'fixed'; v.style.left = '-9999px'; v.style.width = '2px'; v.style.height = '2px'; v.style.opacity = '0';
   document.body.appendChild(v);
   v.load();
   v.onloadedmetadata = () => smartFit(v);
   videoPool[idx] = v;
+  return v;
+}
+
+function showInSlot(v) {
+  v.style.position = ''; v.style.left = ''; v.style.width = ''; v.style.height = ''; v.style.opacity = '';
   return v;
 }
 
@@ -1607,19 +1612,24 @@ function cleanupPool() {
   });
 }
 
-function preloadAhead() {
-  for (let i=1;i<=PRELOAD_AHEAD;i++) {
-    const idx = currentIdx+i; if (idx>=playlist.length) continue;
-    getVideoEl(idx);
-  }
+let preloadRunId = 0;
+async function preloadAhead() {
   cleanupPool();
+  const myRun = ++preloadRunId; // if user scrolls again mid-queue, older queue stops queuing new ones
+  for (let i=1;i<=PRELOAD_AHEAD;i++) {
+    if (myRun !== preloadRunId) return;
+    const idx = currentIdx+i; if (idx>=playlist.length) continue;
+    if (videoPool[idx]) continue; // already loading/loaded from a previous run
+    const v = getVideoEl(idx); // starts this one's download now, at full bandwidth
+    await waitForReady(v, 5000); // let it get well underway before starting the next one
+  }
 }
 
 // ── PLAYER ──
 function launchPlayer() {
   show('player'); hide('home'); hide('settings'); hide('auth'); hide('adminUsers');
   const v = getVideoEl(currentIdx);
-  v.style.display = ''; v.muted = isMuted;
+  showInSlot(v); v.muted = isMuted;
   activeSlot().appendChild(v);
   smartFit(v);
   v.play().catch(()=>{});
@@ -1665,7 +1675,7 @@ function navigate(dir) {
   if (next >= playlist.length) { showLoadMoreBar(); return; }
   isAnimating = true; currentIdx = next;
   const incoming = getVideoEl(currentIdx), inSlot = inactiveSlot(), outSlot = activeSlot();
-  incoming.style.display = ''; incoming.muted = isMuted;
+  showInSlot(incoming); incoming.muted = isMuted;
   inSlot.appendChild(incoming);
   inSlot.classList.remove('hidden');
   inSlot.className  = `video-slot ${dir>0?'slide-in-up':'slide-in-down'}`;
@@ -1675,7 +1685,7 @@ function navigate(dir) {
   showBuffering(incoming);
   setTimeout(() => {
     const outgoing = outSlot.querySelector('video');
-    if (outgoing) { outgoing.pause(); outgoing.style.display = 'none'; document.body.appendChild(outgoing); }
+    if (outgoing) { outgoing.pause(); outgoing.style.position='fixed'; outgoing.style.left='-9999px'; outgoing.style.width='2px'; outgoing.style.height='2px'; outgoing.style.opacity='0'; document.body.appendChild(outgoing); }
     outSlot.classList.add('hidden'); outSlot.className = 'video-slot hidden';
     inSlot.className = 'video-slot'; useSlotA = !useSlotA;
     isAnimating = false; updateUI(); preloadAhead();
@@ -1887,7 +1897,7 @@ async function browsePlayVideo(idx) {
     browsePlayerActive = true;
     show('player'); hide('browse');
     const v2 = getVideoEl(0);
-    v2.style.display = ''; v2.muted = isMuted;
+    showInSlot(v2); v2.muted = isMuted;
     activeSlot().appendChild(v2);
     smartFit(v2);
     v2.play().catch(() => {});
