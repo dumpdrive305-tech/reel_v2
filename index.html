@@ -294,6 +294,7 @@
   .video-opt-btn.danger { background:rgba(255,36,66,0.1); color:#ff2442; }
   .video-opt-btn.danger-all { background:rgba(255,36,66,0.06); color:#ff6b6b; }
   .video-opt-btn.cancel { background:rgba(255,255,255,0.06); color:var(--muted); }
+  .video-opt-btn.download { background:rgba(34,158,217,0.12); color:var(--blue); }
   .video-opt-btn svg { width:18px; height:18px; flex-shrink:0; }
 
   @keyframes slideInUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
@@ -552,6 +553,33 @@
         <div class="mode-btn-desc">Why aren't new videos showing up?</div>
       </div>
     </button>
+    <button class="mode-btn refresh" id="cacheToggleBtn" onclick="toggleAutoCache()">
+      <div class="mode-btn-icon">
+        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </div>
+      <div class="mode-btn-text">
+        <div class="mode-btn-label" id="cacheToggleLabel">Auto-Cache: Off</div>
+        <div class="mode-btn-desc">Cache each video right after you watch it</div>
+      </div>
+    </button>
+    <button class="mode-btn refresh" onclick="closeModePicker(); cacheAllVideos(activeSessionId)">
+      <div class="mode-btn-icon">
+        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/><line x1="4" y1="19" x2="20" y2="19"/></svg>
+      </div>
+      <div class="mode-btn-text">
+        <div class="mode-btn-label">Cache All</div>
+        <div class="mode-btn-desc">Download every video in this group for offline</div>
+      </div>
+    </button>
+    <button class="mode-btn refresh" id="tapModeBtn" onclick="cycleTapMode()">
+      <div class="mode-btn-icon">
+        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      </div>
+      <div class="mode-btn-text">
+        <div class="mode-btn-label" id="tapModeLabel">Tap Opens: Ask</div>
+        <div class="mode-btn-desc">What tapping this group does — tap to cycle</div>
+      </div>
+    </button>
     <button class="mode-btn del" onclick="closeModePicker(); deleteSession(activeSessionId)">
       <div class="mode-btn-icon">
         <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
@@ -563,6 +591,34 @@
     <button class="mode-cancel" onclick="closeModePicker()">Cancel</button>
   </div>
 </div>
+
+<!-- ══ PLAY / OFFLINE PROMPT ══ -->
+<div class="mode-overlay" id="playPromptOverlay">
+  <div class="mode-box">
+    <div class="mode-group-name" id="playPromptName">Group</div>
+    <div class="mode-group-sub">How do you want to watch?</div>
+    <button class="mode-btn play" onclick="promptChoosePlay('online')">
+      <div class="mode-btn-icon">
+        <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3" fill="white" stroke="none"/></svg>
+      </div>
+      <div class="mode-btn-text">
+        <div class="mode-btn-label">Play</div>
+        <div class="mode-btn-desc">Stream from Telegram</div>
+      </div>
+    </button>
+    <button class="mode-btn browse" onclick="promptChoosePlay('offline')">
+      <div class="mode-btn-icon">
+        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><polyline points="7 10 12 15 17 10"/><line x1="5" y1="21" x2="19" y2="21"/></svg>
+      </div>
+      <div class="mode-btn-text">
+        <div class="mode-btn-label">Offline View</div>
+        <div class="mode-btn-desc" id="playPromptOfflineDesc">0 cached</div>
+      </div>
+    </button>
+    <button class="mode-cancel" onclick="closePlayPrompt()">Cancel</button>
+  </div>
+</div>
+
 <input type="file" id="uploadInput" style="display:none" onchange="handleUploadFile(event)"/>
 <div class="upload-progress-overlay" id="uploadProgressOverlay" style="display:none">
   <div class="upload-progress-box">
@@ -596,6 +652,10 @@
 <div class="video-opts-overlay" id="videoOptsOverlay">
   <div class="video-opts-box">
     <div class="video-opts-title" id="videoOptsTitle">Video options</div>
+    <button class="video-opt-btn download" id="videoOptDownloadBtn" onclick="downloadCurrentVideo()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      <span id="videoOptDownloadLabel">Download for offline</span>
+    </button>
     <button class="video-opt-btn danger" onclick="deleteCurrentVideo()">
       <svg viewBox="0 0 24 24" fill="none" stroke="#ff2442" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
       Delete this video
@@ -637,6 +697,12 @@ let totalFetched = 0;
 let totalAvailable = 0;
 let currentToken  = '';
 let currentChatId = '';
+
+// Offline cache state
+let activeGroupChatId = null;
+let activeGroupName   = '';
+let activeAutoCache   = false;
+let playPromptTargetId = null;
 
 
 const slotA  = document.getElementById('slotA');
@@ -732,6 +798,127 @@ async function decryptSession(session, password) {
   const chatId = await decrypt(session.chatId, password);
   if (!token || !chatId) return null;
   return { ...session, token, chatId };
+}
+
+// ── OFFLINE VIDEO CACHE (Cache Storage — sandboxed to this PWA, not the phone gallery) ──
+const VIDEO_CACHE_NAME = 'myreels-videos-v1';
+let storagePersistRequested = false;
+
+function videoCacheKey(fileId) {
+  return new Request('https://cache.myreels.local/video/' + encodeURIComponent(fileId));
+}
+
+async function isVideoCached(fileId) {
+  if (!fileId) return false;
+  try {
+    const cache = await caches.open(VIDEO_CACHE_NAME);
+    return !!(await cache.match(videoCacheKey(fileId)));
+  } catch(e) { return false; }
+}
+
+async function cacheVideo(fileId, url, name, chatId, groupName) {
+  if (!fileId || !url) return false;
+  if (await isVideoCached(fileId)) return true;
+  if (!storagePersistRequested) {
+    storagePersistRequested = true;
+    try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch(e) {}
+  }
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return false;
+    const blob = await resp.blob();
+    const headers = new Headers({
+      'Content-Type': blob.type || 'video/mp4',
+      'X-Video-Name': encodeURIComponent(name || ''),
+      'X-Video-ChatId': encodeURIComponent(chatId || ''),
+      'X-Video-Group': encodeURIComponent(groupName || ''),
+      'X-Video-CachedAt': String(Date.now())
+    });
+    const cache = await caches.open(VIDEO_CACHE_NAME);
+    await cache.put(videoCacheKey(fileId), new Response(blob, { headers }));
+    return true;
+  } catch(e) { console.warn('cacheVideo failed', e); return false; }
+}
+
+async function deleteCachedVideo(fileId) {
+  if (!fileId) return;
+  try {
+    const cache = await caches.open(VIDEO_CACHE_NAME);
+    await cache.delete(videoCacheKey(fileId));
+  } catch(e) {}
+}
+
+// chatId omitted = every cached video across all groups
+async function getCachedEntries(chatId) {
+  try {
+    const cache = await caches.open(VIDEO_CACHE_NAME);
+    const keys = await cache.keys();
+    const out = [];
+    for (const req of keys) {
+      const m = req.url.match(/\/video\/([^/?]+)$/);
+      if (!m) continue;
+      const fileId = decodeURIComponent(m[1]);
+      const resp = await cache.match(req);
+      if (!resp) continue;
+      const h = resp.headers;
+      const entryChatId = decodeURIComponent(h.get('X-Video-ChatId') || '');
+      if (chatId && entryChatId !== chatId) continue;
+      out.push({
+        fileId,
+        name: decodeURIComponent(h.get('X-Video-Name') || fileId),
+        chatId: entryChatId,
+        groupName: decodeURIComponent(h.get('X-Video-Group') || ''),
+        resp
+      });
+    }
+    return out;
+  } catch(e) { return []; }
+}
+
+async function countCached(chatId) {
+  const entries = await getCachedEntries(chatId);
+  return entries.length;
+}
+
+async function purgeCachedForChat(chatId) {
+  if (!chatId) return;
+  const entries = await getCachedEntries(chatId);
+  for (const e of entries) await deleteCachedVideo(e.fileId);
+}
+
+async function loadCachedPlaylist(chatId) {
+  const entries = await getCachedEntries(chatId);
+  const items = [];
+  for (const e of entries) {
+    try {
+      const blob = await e.resp.blob();
+      items.push({ url: URL.createObjectURL(blob), name: e.name, fileId: e.fileId, cached: true });
+    } catch(err) {}
+  }
+  return items;
+}
+
+function tapModeText(mode) {
+  if (mode === 'play') return 'Play';
+  if (mode === 'offline') return 'Offline';
+  return 'Ask';
+}
+
+// Called on whichever video is actually visible/playing — quietly caches
+// it in the background a few seconds in, only if Auto-Cache is on for
+// the active group. Guards itself so it never attaches twice per element.
+function attachWatchCache(vid, idx) {
+  if (!vid || vid._watchCacheAttached) return;
+  vid._watchCacheAttached = true;
+  if (!activeAutoCache) return;
+  const item = playlist[idx];
+  if (!item || !item.fileId || item.cached) return;
+  const onProgress = () => {
+    if (vid.currentTime < 3) return;
+    vid.removeEventListener('timeupdate', onProgress);
+    cacheVideo(item.fileId, item.url, item.name, activeGroupChatId, activeGroupName).catch(()=>{});
+  };
+  vid.addEventListener('timeupdate', onProgress);
 }
 
 
@@ -905,17 +1092,32 @@ async function persistSessions() {
 function openDrawer() { showHome(); renderDrawer(); }
 function closeDrawer() { }
 
-function renderDrawer() {
+function offlinePinnedHTML(count) {
+  return `
+    <div class="session-item" onclick="playOfflineAll()" id="offlinePinnedItem">
+      <div class="session-avatar" style="background:linear-gradient(135deg,#555,#222)">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </div>
+      <div class="session-info">
+        <div class="session-name">Offline Play</div>
+        <div class="session-chat" id="offlinePinnedCount">${count} video${count===1?'':'s'} cached</div>
+      </div>
+    </div>`;
+}
+
+async function renderDrawer() {
   const list = document.getElementById('drawerList');
   const sessions = currentUser?.sessions || [];
+  const cachedCount = await countCached();
+  const pinned = offlinePinnedHTML(cachedCount);
   if (sessions.length === 0) {
-    list.innerHTML = `<div class="home-empty">
+    list.innerHTML = pinned + `<div class="home-empty">
       <div class="home-empty-icon">🎬</div>
       No groups yet.<br/>Tap Add to get started.
     </div>`;
     return;
   }
-  list.innerHTML = sessions.map(s => {
+  list.innerHTML = pinned + sessions.map(s => {
     const initials = s.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase() || 'TG';
     return `
       <div class="session-item" onclick="quickPlay('${s.id}')">
@@ -933,16 +1135,90 @@ function renderDrawer() {
   }).join('');
 }
 
-function quickPlay(id) {
+async function playOfflineAll() {
+  activeSessionId = null;
+  activeGroupChatId = null;
+  activeGroupName = 'Offline Play';
+  activeAutoCache = false;
+  currentChatId = '';
+  startLoading();
+  setLabel('Loading offline videos…');
+  const items = await loadCachedPlaylist();
+  if (items.length === 0) {
+    showSplashError('No offline videos cached yet.\n\nOpen a group\'s gear menu and tap "Cache All", or turn on Auto-Cache.');
+    return;
+  }
+  playlist = items;
+  currentIdx = 0;
+  totalFetched = items.length;
+  totalAvailable = items.length;
+  stopLoading();
+  launchPlayer();
+}
+
+async function quickPlay(id) {
+  const s = getSession(id);
+  if (!s) return;
+  const mode = s.tapMode || 'ask';
+  if (mode === 'play') { startOnlinePlay(id); return; }
+  if (mode === 'offline') { startOfflinePlay(id); return; }
+
+  const count = await countCached(s.chatId);
+  document.getElementById('playPromptName').textContent = s.name;
+  document.getElementById('playPromptOfflineDesc').textContent = count + (count===1?' video cached':' videos cached');
+  playPromptTargetId = id;
+  document.getElementById('playPromptOverlay').classList.add('open');
+}
+
+function closePlayPrompt() {
+  document.getElementById('playPromptOverlay').classList.remove('open');
+  playPromptTargetId = null;
+}
+
+function promptChoosePlay(kind) {
+  const id = playPromptTargetId;
+  closePlayPrompt();
+  if (!id) return;
+  if (kind === 'online') startOnlinePlay(id);
+  else startOfflinePlay(id);
+}
+
+function startOnlinePlay(id) {
   activeSessionId = id;
   const s = getSession(id);
   if (!s) return;
   currentToken  = s.token;
   currentChatId = s.chatId;
+  activeGroupChatId = s.chatId;
+  activeGroupName   = s.name;
+  activeAutoCache   = !!s.autoCache;
   totalFetched = 0; totalAvailable = 0;
   playlist = [];
   startLoading();
   fetchVideos();
+}
+
+async function startOfflinePlay(id) {
+  activeSessionId = id;
+  const s = getSession(id);
+  if (!s) return;
+  currentChatId = s.chatId;
+  activeGroupChatId = s.chatId;
+  activeGroupName   = s.name;
+  activeAutoCache   = false;
+  startLoading();
+  setLabel('Loading offline videos…');
+  const items = await loadCachedPlaylist(s.chatId);
+  if (items.length === 0) {
+    showSplashError('No offline videos cached yet for this group.\n\nUse "Cache All" or turn on Auto-Cache in the group menu.');
+    return;
+  }
+  playlist = items;
+  currentIdx = 0;
+  totalFetched = items.length;
+  totalAvailable = items.length;
+  stopLoading();
+  launchPlayer();
 }
 
 function openSessionMenu(id) {
@@ -953,6 +1229,8 @@ function openSessionMenu(id) {
   currentChatId = s.chatId;
   document.getElementById('modeGroupName').textContent = s.name;
   document.getElementById('modeGroupSub').textContent  = 'Options';
+  document.getElementById('cacheToggleLabel').textContent = s.autoCache ? 'Auto-Cache: On' : 'Auto-Cache: Off';
+  document.getElementById('tapModeLabel').textContent = 'Tap Opens: ' + tapModeText(s.tapMode);
   document.getElementById('modeOverlay').classList.add('open');
 }
 
@@ -960,8 +1238,78 @@ function closeModePicker() {
   document.getElementById('modeOverlay').classList.remove('open');
 }
 
+async function toggleAutoCache() {
+  const s = getSession(activeSessionId);
+  if (!s) return;
+  s.autoCache = !s.autoCache;
+  document.getElementById('cacheToggleLabel').textContent = s.autoCache ? 'Auto-Cache: On' : 'Auto-Cache: Off';
+  await persistSessions();
+}
+
+async function cycleTapMode() {
+  const s = getSession(activeSessionId);
+  if (!s) return;
+  const order = ['ask','play','offline'];
+  const cur = order.indexOf(s.tapMode || 'ask');
+  s.tapMode = order[(cur+1) % order.length];
+  document.getElementById('tapModeLabel').textContent = 'Tap Opens: ' + tapModeText(s.tapMode);
+  await persistSessions();
+}
+
+async function cacheAllVideos(id) {
+  const s = getSession(id);
+  if (!s) return;
+  const overlay = document.getElementById('uploadProgressOverlay');
+  const fill    = document.getElementById('uploadProgressFill');
+  const text    = document.getElementById('uploadProgressText');
+  overlay.style.display = 'flex';
+  fill.style.width = '0%';
+  text.textContent = 'Fetching video list…';
+  try {
+    const hash = await sha256(currentUser.password);
+    const uname = currentUser.isAdmin ? '__admin__' : currentUser.username;
+    const r = await fetch(WORKER_URL + '/videos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: uname, hash, chatId: s.chatId })
+    });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error);
+    const items = j.videos || [];
+    if (items.length === 0) {
+      text.textContent = 'No videos to cache.';
+      setTimeout(() => { overlay.style.display = 'none'; }, 1000);
+      return;
+    }
+
+    const base = `https://api.telegram.org/bot${s.token}`;
+    let done = 0, skipped = 0;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      text.textContent = `Caching ${i+1} / ${items.length}…`;
+      fill.style.width = Math.round((i/items.length)*100) + '%';
+      try {
+        if (await isVideoCached(item.fileId)) { skipped++; continue; }
+        const resolved = await resolveFileId(base, item);
+        if (resolved.failed) continue;
+        if (await cacheVideo(item.fileId, resolved.url, item.name, s.chatId, s.name)) done++;
+      } catch(e) { console.warn('cache all: item failed', e); }
+    }
+    fill.style.width = '100%';
+    text.textContent = `Cached ${done} video(s)${skipped ? `, ${skipped} already cached` : ''}.`;
+    setTimeout(() => { overlay.style.display = 'none'; renderDrawer(); }, 1400);
+  } catch(e) {
+    text.textContent = 'Could not cache: ' + e.message;
+    setTimeout(() => { overlay.style.display = 'none'; }, 1800);
+  }
+}
+
 function modePlay() {
   closeModePicker();
+  const s = getSession(activeSessionId);
+  activeGroupChatId = s ? s.chatId : currentChatId;
+  activeGroupName   = s ? s.name   : '';
+  activeAutoCache   = s ? !!s.autoCache : false;
   totalFetched = 0; totalAvailable = 0;
   playlist = [];
   startLoading();
@@ -1110,6 +1458,9 @@ function refreshSession(id) {
   if (!s) return;
   currentToken  = s.token;
   currentChatId = s.chatId;
+  activeGroupChatId = s.chatId;
+  activeGroupName   = s.name;
+  activeAutoCache   = !!s.autoCache;
   totalFetched  = 0; totalAvailable = 0;
   showHome();
   startLoading();
@@ -1139,6 +1490,7 @@ async function deleteSession(id) {
   currentUser.sessions = currentUser.sessions.filter(s => s.id !== id);
   if (activeSessionId === id) activeSessionId = null;
   await persistSessions();
+  try { await purgeCachedForChat(s.chatId); } catch(e) {}
   renderDrawer();
 }
 
@@ -1505,13 +1857,31 @@ function updateCountUI() {
 async function loadMoreVideos() { hideLoadMoreBar(); }
 
 // ── VIDEO OPTIONS (gear menu) ──
-function openVideoOpts() {
+async function openVideoOpts() {
   const item = playlist[currentIdx];
   document.getElementById('videoOptsTitle').textContent = item ? item.name.replace(/\.[^.]+$/,'').replace(/[_-]/g,' ') : 'Options';
   document.getElementById('videoOptsOverlay').classList.add('open');
+  const label = document.getElementById('videoOptDownloadLabel');
+  const btn   = document.getElementById('videoOptDownloadBtn');
+  if (item && item.fileId) {
+    const cached = item.cached || await isVideoCached(item.fileId);
+    label.textContent = cached ? 'Downloaded ✓' : 'Download for offline';
+    btn.style.opacity = cached ? '0.6' : '1';
+  }
 }
 function closeVideoOpts() {
   document.getElementById('videoOptsOverlay').classList.remove('open');
+}
+
+async function downloadCurrentVideo() {
+  const item = playlist[currentIdx];
+  if (!item || !item.fileId) return;
+  const label = document.getElementById('videoOptDownloadLabel');
+  if (item.cached || await isVideoCached(item.fileId)) { closeVideoOpts(); return; }
+  label.textContent = 'Downloading…';
+  const ok = await cacheVideo(item.fileId, item.url, item.name, activeGroupChatId, activeGroupName);
+  label.textContent = ok ? 'Downloaded ✓' : 'Failed — try again';
+  if (ok) setTimeout(closeVideoOpts, 600);
 }
 
 async function deleteCurrentVideo() {
@@ -1534,6 +1904,7 @@ async function deleteCurrentVideo() {
       }) : Promise.resolve()
     ]);
   } catch(e) { console.warn('delete failed', e); }
+  try { await deleteCachedVideo(item.fileId); } catch(e) {}
   playlist.splice(currentIdx, 1);
   totalFetched = Math.max(0, totalFetched - 1);
   if (playlist.length === 0) { exitPlayer(); return; }
@@ -1559,6 +1930,7 @@ async function deleteAllVideos() {
       body: JSON.stringify({ username: currentUser.username, hash, chatId: currentChatId })
     });
   } catch(e) { console.warn('delete-all failed', e); }
+  try { await purgeCachedForChat(currentChatId); } catch(e) {}
   playlist = [];
   totalFetched = 0;
   exitPlayer();
@@ -1640,6 +2012,7 @@ function launchPlayer() {
   smartFit(v);
   v.play().catch(()=>{});
   showBuffering(v);
+  attachWatchCache(v, currentIdx);
   updateUI();
   preloadAhead();
   setupTouch();
@@ -1689,6 +2062,7 @@ function navigate(dir) {
   incoming.currentTime = 0;
   incoming.play().catch(()=>{});
   showBuffering(incoming);
+  attachWatchCache(incoming, currentIdx);
   setTimeout(() => {
     const outgoing = outSlot.querySelector('video');
     if (outgoing) { outgoing.pause(); outgoing.style.position='fixed'; outgoing.style.left='-9999px'; outgoing.style.width='2px'; outgoing.style.height='2px'; outgoing.style.opacity='0'; document.body.appendChild(outgoing); }
@@ -1879,6 +2253,7 @@ async function deleteBrowseVideo(idx) {
       }) : Promise.resolve()
     ]);
   } catch(e) { console.warn('delete failed', e); }
+  try { await deleteCachedVideo(item.fileId); } catch(e) {}
   browseItems.splice(idx, 1);
   renderBrowseList();
 }
