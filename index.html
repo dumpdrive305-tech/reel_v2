@@ -186,7 +186,7 @@
   /* ── RENAME MODAL ── */
   .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:60; display:flex; align-items:flex-end; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.25s; -webkit-backdrop-filter:blur(4px); backdrop-filter:blur(4px); }
   .modal-overlay.open { opacity:1; pointer-events:all; }
-  .modal-box { background:#161616; border:1px solid var(--border); border-radius:24px 24px 0 0; width:100%; max-width:480px; padding:28px 24px 40px; transform:translateY(100%); transition:transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94); }
+  .modal-box { background:#161616; border:1px solid var(--border); border-radius:24px 24px 0 0; width:100%; max-width:480px; max-height:85vh; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:28px 24px 40px; transform:translateY(100%); transition:transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94); }
   .modal-overlay.open .modal-box { transform:translateY(0); }
   .modal-title { font-size:16px; font-weight:800; margin-bottom:18px; }
   .modal-input { width:100%; height:50px; background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:13px; padding:0 16px; color:#fff; font-family:var(--font-display); font-size:15px; font-weight:600; outline:none; -webkit-appearance:none; }
@@ -244,7 +244,7 @@
   /* ── MODE PICKER (Play vs Browse) ── */
   .mode-overlay { position:fixed; inset:0; z-index:55; background:rgba(0,0,0,0.75); display:flex; align-items:flex-end; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.25s; -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
   .mode-overlay.open { opacity:1; pointer-events:all; }
-  .mode-box { background:#161616; border:1px solid var(--border); border-radius:24px 24px 0 0; width:100%; max-width:480px; padding:24px 20px 48px; transform:translateY(100%); transition:transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94); }
+  .mode-box { background:#161616; border:1px solid var(--border); border-radius:24px 24px 0 0; width:100%; max-width:480px; max-height:85vh; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:24px 20px 48px; transform:translateY(100%); transition:transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94); }
   .mode-overlay.open .mode-box { transform:translateY(0); }
   .mode-group-name { font-size:18px; font-weight:800; margin-bottom:6px; }
   .mode-group-sub { font-family:var(--font-mono); font-size:10px; color:var(--muted); margin-bottom:24px; }
@@ -289,7 +289,7 @@
   /* ── VIDEO OPTIONS OVERLAY ── */
   .video-opts-overlay { position:fixed; inset:0; z-index:50; background:rgba(0,0,0,0.7); display:flex; align-items:flex-end; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.25s; -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
   .video-opts-overlay.open { opacity:1; pointer-events:all; }
-  .video-opts-box { background:#161616; border:1px solid var(--border); border-radius:24px 24px 0 0; width:100%; max-width:480px; padding:20px 20px 40px; transform:translateY(100%); transition:transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94); }
+  .video-opts-box { background:#161616; border:1px solid var(--border); border-radius:24px 24px 0 0; width:100%; max-width:480px; max-height:85vh; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:20px 20px 40px; transform:translateY(100%); transition:transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94); }
   .video-opts-overlay.open .video-opts-box { transform:translateY(0); }
   .video-opts-title { font-size:13px; font-weight:700; color:var(--muted); margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid var(--border); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .video-opt-btn { width:100%; height:52px; border:none; border-radius:14px; font-family:var(--font-display); font-size:15px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:12px; padding:0 16px; margin-bottom:8px; transition:opacity 0.15s; }
