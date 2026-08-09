@@ -503,7 +503,7 @@
         <div class="mode-btn-desc">TikTok-style swipe feed</div>
       </div>
     </button>
-    <button class="mode-btn browse" onclick="modeBrowse()">
+    <button class="mode-btn browse" id="browseModeBtn" onclick="modeBrowse()">
       <div class="mode-btn-icon">
         <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
       </div>
@@ -588,7 +588,7 @@
         <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
       </div>
       <div class="mode-btn-text">
-        <div class="mode-btn-label">Delete Group</div>
+        <div class="mode-btn-label" id="deleteGroupLabel">Delete Group</div>
       </div>
     </button>
     <button class="mode-cancel" onclick="closeModePicker()">Cancel</button>
@@ -1259,10 +1259,13 @@ function openSessionMenu(id) {
   if (!s) return;
   currentToken  = s.token;
   currentChatId = s.chatId;
+  const isOwned = s.color !== 'green'; // 'green' = shared to you by someone else, never something you created
   document.getElementById('modeGroupName').textContent = s.name;
   document.getElementById('modeGroupSub').textContent  = 'Options';
   document.getElementById('cacheToggleLabel').textContent = s.autoCache ? 'Auto-Cache: On' : 'Auto-Cache: Off';
   document.getElementById('tapModeLabel').textContent = 'Tap Opens: ' + tapModeText(s.tapMode);
+  document.getElementById('browseModeBtn').style.display = isOwned ? 'flex' : 'none';
+  document.getElementById('deleteGroupLabel').textContent = isOwned ? 'Delete Group' : 'Leave Group';
   document.getElementById('modeOverlay').classList.add('open');
 }
 
@@ -1497,8 +1500,9 @@ function refreshSession(id) {
 async function deleteSession(id) {
   const s = getSession(id);
   if (!s) return;
+  const isOwned = s.color !== 'green'; // 'green' = shared to you — you can only leave, never delete the channel
 
-  if (currentUser.isAdmin) {
+  if (isOwned && currentUser.isAdmin) {
     const wantsFullDelete = confirm(
       `Delete "${s.name}"?\n\nOK = also permanently delete the actual channel on Telegram (removes it for everyone it's shared with, can't be undone).\nCancel = just remove it from your own list, channel stays on Telegram.`
     );
@@ -1510,8 +1514,10 @@ async function deleteSession(id) {
         alert('Could not delete the channel on Telegram: ' + e.message + '\nRemoving it from your list anyway.');
       }
     }
-  } else {
+  } else if (isOwned) {
     if (!confirm(`Remove "${s.name}" from your list? (This only removes it for you — the channel itself isn't touched.)`)) return;
+  } else {
+    if (!confirm(`Leave "${s.name}"? You'll lose access — whoever shared it with you can add you back anytime.`)) return;
   }
 
   currentUser.sessions = currentUser.sessions.filter(s => s.id !== id);
