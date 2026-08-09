@@ -619,16 +619,7 @@
   </div>
 </div>
 
-<!-- ══ OFFLINE VIDEO — FOLDER CHOOSER ══ -->
-<div class="mode-overlay" id="offlineFoldersOverlay">
-  <div class="mode-box">
-    <div class="mode-group-name">Offline Video</div>
-    <div class="mode-group-sub">Choose a group to play from</div>
-    <div id="offlineFoldersList"></div>
-    <button class="mode-cancel" onclick="closeOfflineFolders()">Cancel</button>
-  </div>
-</div>
-
+<input type="file" id="localFolderInput" webkitdirectory multiple accept="video/*" style="display:none" onchange="handleLocalFolderPick(event)"/>
 <input type="file" id="uploadInput" style="display:none" onchange="handleUploadFile(event)"/>
 <div class="upload-progress-overlay" id="uploadProgressOverlay" style="display:none">
   <div class="upload-progress-box">
@@ -1106,24 +1097,23 @@ async function persistSessions() {
 function openDrawer() { showHome(); renderDrawer(); }
 function closeDrawer() { }
 
-function offlinePinnedHTML(count) {
+function offlinePinnedHTML() {
   return `
-    <div class="session-item" onclick="openOfflineFolders()" id="offlinePinnedItem">
+    <div class="session-item" onclick="pickLocalFolder()" id="offlinePinnedItem">
       <div class="session-avatar" style="background:linear-gradient(135deg,#555,#222)">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       </div>
       <div class="session-info">
         <div class="session-name">Offline Video</div>
-        <div class="session-chat" id="offlinePinnedCount">${count} video${count===1?'':'s'} cached</div>
+        <div class="session-chat">tap to pick a folder on your device</div>
       </div>
     </div>`;
 }
 
-async function renderDrawer() {
+function renderDrawer() {
   const list = document.getElementById('drawerList');
   const sessions = currentUser?.sessions || [];
-  const cachedCount = await countCached();
-  const pinned = offlinePinnedHTML(cachedCount);
+  const pinned = offlinePinnedHTML();
   if (sessions.length === 0) {
     list.innerHTML = pinned + `<div class="home-empty">
       <div class="home-empty-icon">🎬</div>
@@ -1149,32 +1139,32 @@ async function renderDrawer() {
   }).join('');
 }
 
-// Folder-style chooser — lists each group that actually has cached videos,
-// tapping one plays only that group's cached set (via startOfflinePlay).
-async function openOfflineFolders() {
-  const list = document.getElementById('offlineFoldersList');
-  list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px 0">Loading…</div>';
-  document.getElementById('offlineFoldersOverlay').classList.add('open');
-  const sessions = currentUser?.sessions || [];
-  const rows = await Promise.all(sessions.map(async s => ({ s, count: await countCached(s.chatId) })));
-  const withCache = rows.filter(r => r.count > 0);
-  if (withCache.length === 0) {
-    list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px 0">No cached videos yet.<br/>Use "Cache All" or turn on Auto-Cache in a group\'s menu first.</div>';
+// ── LOCAL FOLDER PLAYBACK — a completely separate feature from the
+// Telegram Cache/Auto-Cache system above. This just points the browser's
+// native folder picker at the phone's own storage and plays whatever
+// video files are in there directly, via object URLs. Nothing here ever
+// touches Cache Storage, Telegram, or the Worker. Android has no way to
+// remember folder access between visits, so it re-prompts every time. ──
+function pickLocalFolder() {
+  document.getElementById('localFolderInput').click();
+}
+
+function handleLocalFolderPick(event) {
+  const files = Array.from(event.target.files || []).filter(f => f.type.startsWith('video/'));
+  event.target.value = '';
+  if (files.length === 0) {
+    alert('No video files found in that folder.');
     return;
   }
-  list.innerHTML = withCache.map(r => `
-    <button class="mode-btn browse" onclick="closeOfflineFolders(); startOfflinePlay('${r.s.id}')">
-      <div class="mode-btn-icon">
-        <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
-      </div>
-      <div class="mode-btn-text">
-        <div class="mode-btn-label">${escHtml(r.s.name)}</div>
-        <div class="mode-btn-desc">${r.count} video${r.count===1?'':'s'} cached</div>
-      </div>
-    </button>`).join('');
-}
-function closeOfflineFolders() {
-  document.getElementById('offlineFoldersOverlay').classList.remove('open');
+  activeSessionId   = null;
+  activeGroupChatId = null;
+  activeGroupName   = 'Offline Video';
+  activeAutoCache   = false;
+  currentChatId     = '';
+  playlist = files.map(f => ({ url: URL.createObjectURL(f), name: f.name, fileId: null, cached: true }));
+  currentIdx = 0;
+  totalFetched = totalAvailable = playlist.length;
+  launchPlayer();
 }
 
 async function quickPlay(id) {
