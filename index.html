@@ -133,13 +133,7 @@
   .upload-progress-box { background:#161616; border:1px solid #2a2a2a; border-radius:16px; padding:24px; width:80%; max-width:320px; text-align:center; font-size:14px; color:#eee; }
   .upload-progress-bar { margin-top:14px; height:8px; background:#2a2a2a; border-radius:4px; overflow:hidden; }
   .upload-progress-fill { height:100%; width:0%; background:var(--blue,#2ecc71); transition:width 0.2s; }
-  .bg-cache-banner { position:fixed; left:12px; right:12px; bottom:16px; z-index:80; background:#161616; border:1px solid var(--border); border-radius:14px; padding:10px 14px; display:none; align-items:center; gap:10px; box-shadow:0 8px 24px rgba(0,0,0,0.4); max-width:480px; margin:0 auto; }
-  .bg-cache-banner.visible { display:flex; }
-  .bg-cache-spinner { width:16px; height:16px; border:2px solid rgba(255,255,255,0.15); border-top-color:var(--blue); border-radius:50%; animation:spin 0.8s linear infinite; flex-shrink:0; }
-  .bg-cache-info { flex:1; min-width:0; }
-  .bg-cache-text { font-family:var(--font-mono); font-size:11px; color:#eee; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .bg-cache-bar { margin-top:6px; height:4px; background:#2a2a2a; border-radius:2px; overflow:hidden; }
-  .bg-cache-fill { height:100%; width:0%; background:var(--blue); transition:width 0.2s; }
+  .cache-badge { background:rgba(34,158,217,0.15); color:var(--blue); font-family:var(--font-mono); font-size:10px; padding:3px 7px; border-radius:8px; margin-right:8px; flex-shrink:0; white-space:nowrap; }
   .user-row { background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:14px; padding:14px 16px; margin-bottom:10px; }
   .user-row-top { display:flex; justify-content:space-between; align-items:center; font-size:14px; }
   .user-row-pass { font-family:var(--font-mono); font-size:12px; color:var(--muted); }
@@ -257,10 +251,12 @@
   .mode-btn { width:100%; height:64px; border:none; border-radius:18px; font-family:var(--font-display); font-size:16px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:16px; padding:0 20px; margin-bottom:10px; transition:opacity 0.15s, transform 0.1s; }
   .mode-btn:active { opacity:0.8; transform:scale(0.98); }
   .mode-btn.play { background:var(--red); color:#fff; }
-  .mode-btn.browse { background:rgba(255,255,255,0.07); border:1px solid var(--border); color:#fff; }
+  .mode-btn.browse, .mode-btn.refresh, .mode-btn.upload, .mode-btn.share, .mode-btn.rename { background:#141414; border:1px solid var(--border); color:#fff; }
+  .mode-btn.del { background:rgba(255,36,66,0.08); border:1px solid rgba(255,36,66,0.25); color:#ff6b6b; }
   .mode-btn-icon { width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
   .mode-btn.play .mode-btn-icon { background:rgba(255,255,255,0.2); }
-  .mode-btn.browse .mode-btn-icon { background:rgba(255,255,255,0.08); }
+  .mode-btn.browse .mode-btn-icon, .mode-btn.refresh .mode-btn-icon, .mode-btn.upload .mode-btn-icon, .mode-btn.share .mode-btn-icon, .mode-btn.rename .mode-btn-icon { background:rgba(255,255,255,0.06); }
+  .mode-btn.del .mode-btn-icon { background:rgba(255,36,66,0.12); }
   .mode-btn-icon svg { width:20px; height:20px; stroke:#fff; fill:none; }
   .mode-btn-text { display:flex; flex-direction:column; align-items:flex-start; gap:2px; }
   .mode-btn-label { font-size:16px; font-weight:700; }
@@ -628,14 +624,6 @@
 
 <input type="file" id="localFolderInput" webkitdirectory multiple accept="video/*" style="display:none" onchange="handleLocalFolderPick(event)"/>
 <input type="file" id="uploadInput" style="display:none" onchange="handleUploadFile(event)"/>
-
-<div class="bg-cache-banner" id="bgCacheBanner">
-  <div class="bg-cache-spinner"></div>
-  <div class="bg-cache-info">
-    <div class="bg-cache-text" id="bgCacheText">Caching…</div>
-    <div class="bg-cache-bar"><div class="bg-cache-fill" id="bgCacheFill"></div></div>
-  </div>
-</div>
 <div class="upload-progress-overlay" id="uploadProgressOverlay" style="display:none">
   <div class="upload-progress-box">
     <div id="uploadProgressText">Uploading…</div>
@@ -1138,8 +1126,11 @@ function renderDrawer() {
   }
   list.innerHTML = pinned + sessions.map(s => {
     const initials = s.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase() || 'TG';
+    const p = cachingProgress[s.id];
+    const badge = p ? `<span class="cache-badge" id="cacheBadge-${s.id}">${p.current}/${p.total}</span>` : '';
     return `
       <div class="session-item" onclick="quickPlay('${s.id}')">
+        ${badge}
         <div class="session-avatar ${s.color||'blue'}">${initials}</div>
         <div class="session-info">
           <div class="session-name">${escHtml(s.name)}</div>
@@ -1152,6 +1143,21 @@ function renderDrawer() {
         </div>
       </div>`;
   }).join('');
+}
+
+// ── in-row caching progress (no floating banner — just a number badge
+// on the group's own Home row, only visible when you're actually there;
+// the caching loop itself keeps running regardless of what's on screen) ──
+let cachingProgress = {}; // sessionId -> {current, total}
+
+function updateGroupCacheBadge(id) {
+  const el = document.getElementById('cacheBadge-' + id);
+  const p = cachingProgress[id];
+  if (el && p) {
+    el.textContent = `${p.current}/${p.total}`;
+  } else {
+    renderDrawer(); // badge needs to appear or disappear — re-render the row
+  }
 }
 
 // ── LOCAL FOLDER PLAYBACK — a completely separate feature from the
@@ -1176,7 +1182,7 @@ function handleLocalFolderPick(event) {
   activeGroupName   = 'Offline Video';
   activeAutoCache   = false;
   currentChatId     = '';
-  playlist = files.map(f => ({ url: URL.createObjectURL(f), name: f.name, fileId: null, cached: true }));
+  playlist = shuffle(files.map(f => ({ url: URL.createObjectURL(f), name: f.name, fileId: null, cached: true })));
   currentIdx = 0;
   totalFetched = totalAvailable = playlist.length;
   launchPlayer();
@@ -1239,7 +1245,7 @@ async function startOfflinePlay(id) {
     showSplashError('No offline videos cached yet for this group.\n\nUse "Cache All" or turn on Auto-Cache in the group menu.');
     return;
   }
-  playlist = items;
+  playlist = shuffle(items);
   currentIdx = 0;
   totalFetched = items.length;
   totalAvailable = items.length;
@@ -1282,20 +1288,11 @@ async function cycleTapMode() {
   await persistSessions();
 }
 
-let bgCacheBusy = false;
-
 async function cacheAllVideos(id) {
   const s = getSession(id);
   if (!s) return;
-  if (bgCacheBusy) { alert('Already caching a group — let that finish first.'); return; }
-  bgCacheBusy = true;
+  if (cachingProgress[id]) { alert('Already caching this group — let that finish first.'); return; }
 
-  const banner = document.getElementById('bgCacheBanner');
-  const fill   = document.getElementById('bgCacheFill');
-  const text   = document.getElementById('bgCacheText');
-  banner.classList.add('visible');
-  fill.style.width = '0%';
-  text.textContent = `${s.name}: fetching video list…`;
   try {
     const hash = await sha256(currentUser.password);
     const uname = currentUser.isAdmin ? '__admin__' : currentUser.username;
@@ -1307,18 +1304,17 @@ async function cacheAllVideos(id) {
     const j = await r.json();
     if (!j.ok) throw new Error(j.error);
     const items = j.videos || [];
-    if (items.length === 0) {
-      text.textContent = `${s.name}: no videos to cache.`;
-      setTimeout(() => { banner.classList.remove('visible'); bgCacheBusy = false; }, 1500);
-      return;
-    }
+    if (items.length === 0) { alert(`${s.name}: no videos to cache.`); return; }
+
+    cachingProgress[id] = { current: 0, total: items.length };
+    updateGroupCacheBadge(id);
 
     const base = `https://api.telegram.org/bot${s.token}`;
     let done = 0, skipped = 0;
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      text.textContent = `${s.name}: caching ${i+1} / ${items.length}…`;
-      fill.style.width = Math.round((i/items.length)*100) + '%';
+      cachingProgress[id] = { current: i+1, total: items.length };
+      updateGroupCacheBadge(id);
       try {
         if (await isVideoCached(item.fileId)) { skipped++; continue; }
         const resolved = await resolveFileId(base, item);
@@ -1326,13 +1322,12 @@ async function cacheAllVideos(id) {
         if (await cacheVideo(item.fileId, resolved.url, item.name, s.chatId, s.name)) done++;
       } catch(e) { console.warn('cache all: item failed', e); }
     }
-    fill.style.width = '100%';
-    text.textContent = `${s.name}: cached ${done} video(s)${skipped ? `, ${skipped} already cached` : ''}.`;
-    renderDrawer();
-    setTimeout(() => { banner.classList.remove('visible'); bgCacheBusy = false; }, 2000);
+    console.log(`Cached ${done} video(s) for ${s.name}${skipped ? `, ${skipped} already cached` : ''}.`);
   } catch(e) {
-    text.textContent = `${s.name}: could not cache — ` + e.message;
-    setTimeout(() => { banner.classList.remove('visible'); bgCacheBusy = false; }, 2500);
+    console.warn('cache all failed', e);
+  } finally {
+    delete cachingProgress[id];
+    updateGroupCacheBadge(id);
   }
 }
 
