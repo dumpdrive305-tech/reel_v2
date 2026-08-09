@@ -1259,7 +1259,7 @@ function openSessionMenu(id) {
   if (!s) return;
   currentToken  = s.token;
   currentChatId = s.chatId;
-  const isOwned = s.color !== 'green'; // 'green' = shared to you by someone else, never something you created
+  const isOwned = s.color !== 'green'; // 'green' = viewer share; 'blue'/'purple' = owner or co-admin, full access
   document.getElementById('modeGroupName').textContent = s.name;
   document.getElementById('modeGroupSub').textContent  = 'Options';
   document.getElementById('cacheToggleLabel').textContent = s.autoCache ? 'Auto-Cache: On' : 'Auto-Cache: Off';
@@ -1352,19 +1352,28 @@ function modeBrowse() {
 }
 
 // ── SHARE (by username — no phone number, no link, no account access) ──
+function pickShareRole() {
+  return confirm(
+    'Share as Admin or Viewer?\n\n' +
+    'OK = Admin — co-owner. Can Browse, upload, manage the group. The channel only gets deleted once every admin (including you) has left it.\n\n' +
+    'Cancel = Viewer — can watch and cache videos, but can\'t manage or delete the group.'
+  ) ? 'admin' : 'viewer';
+}
+
 async function shareSession(id) {
   const s = getSession(id);
   if (!s) return;
   const targetUsername = prompt('Share this drive with which username?');
   if (!targetUsername) return;
+  const role = pickShareRole();
   try {
     const hash = await sha256(currentUser.password);
     await apiCall('share', {
       username: currentUser.username, hash,
       targetUsername: targetUsername.trim().toLowerCase(),
-      name: s.name, token: s.token, chatId: s.chatId
+      name: s.name, token: s.token, chatId: s.chatId, role
     });
-    alert(`Shared with @${targetUsername.trim().toLowerCase()} — it'll show up next time they open the app.`);
+    alert(`Shared with @${targetUsername.trim().toLowerCase()} as ${role === 'admin' ? 'an admin' : 'a viewer'} — it'll show up next time they open the app.`);
   } catch(e) {
     alert('Could not share: ' + e.message);
   }
@@ -1500,22 +1509,22 @@ function refreshSession(id) {
 async function deleteSession(id) {
   const s = getSession(id);
   if (!s) return;
-  const isOwned = s.color !== 'green'; // 'green' = shared to you — you can only leave, never delete the channel
+  const isOwned = s.color !== 'green'; // 'green' = viewer share — you can only leave, never affect the channel
 
-  if (isOwned && currentUser.isAdmin) {
-    const wantsFullDelete = confirm(
-      `Delete "${s.name}"?\n\nOK = also permanently delete the actual channel on Telegram (removes it for everyone it's shared with, can't be undone).\nCancel = just remove it from your own list, channel stays on Telegram.`
-    );
-    if (wantsFullDelete) {
-      try {
-        const adminHash = await sha256(currentUser.password);
-        await apiCall('delete-channel', { adminHash, chatId: s.chatId });
-      } catch(e) {
-        alert('Could not delete the channel on Telegram: ' + e.message + '\nRemoving it from your list anyway.');
-      }
+  if (isOwned) {
+    if (!confirm(
+      `Leave admin access to "${s.name}"?\n\n` +
+      `If you're the last remaining admin, the channel gets permanently deleted from Telegram. If other admins still have it, it just stays and you simply lose your own access.`
+    )) return;
+    try {
+      const payload = { chatId: s.chatId };
+      if (currentUser.isAdmin) payload.adminHash = await sha256(currentUser.password);
+      else { payload.username = currentUser.username; payload.hash = await sha256(currentUser.password); }
+      const res = await apiCall('leave-channel', payload);
+      if (res.actuallyDeleted) alert('That was the last admin — the channel has been deleted from Telegram.');
+    } catch(e) {
+      alert('Could not update admin status on the server: ' + e.message + '\nRemoving it from your list anyway.');
     }
-  } else if (isOwned) {
-    if (!confirm(`Remove "${s.name}" from your list? (This only removes it for you — the channel itself isn't touched.)`)) return;
   } else {
     if (!confirm(`Leave "${s.name}"? You'll lose access — whoever shared it with you can add you back anytime.`)) return;
   }
@@ -1715,10 +1724,11 @@ async function loadUsersList(skipLoadingFlash) {
 async function adminSharePrompt(name, token, chatId) {
   const target = prompt(`Share "${name}" with which username?`);
   if (!target) return;
+  const role = pickShareRole();
   try {
     const adminHash = await sha256(currentUser.password);
-    await apiCall('admin-share', { adminHash, targetUsername: target.trim().toLowerCase(), name, token, chatId });
-    alert('Shared.');
+    await apiCall('admin-share', { adminHash, targetUsername: target.trim().toLowerCase(), name, token, chatId, role });
+    alert(`Shared as ${role === 'admin' ? 'an admin' : 'a viewer'}.`);
     loadUsersList();
   } catch(e) { alert('Could not share: ' + e.message); }
 }
@@ -1731,10 +1741,11 @@ async function adminShareToUser(targetUsername) {
   const idx = parseInt(pick, 10) - 1;
   const s = currentUser.sessions[idx];
   if (!s) return;
+  const role = pickShareRole();
   try {
     const adminHash = await sha256(currentUser.password);
-    await apiCall('admin-share', { adminHash, targetUsername, name: s.name, token: s.token, chatId: s.chatId });
-    alert('Shared.');
+    await apiCall('admin-share', { adminHash, targetUsername, name: s.name, token: s.token, chatId: s.chatId, role });
+    alert(`Shared as ${role === 'admin' ? 'an admin' : 'a viewer'}.`);
     loadUsersList();
   } catch(e) { alert('Could not share: ' + e.message); }
 }
