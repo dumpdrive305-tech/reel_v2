@@ -1634,6 +1634,9 @@ async function deleteSession(id) {
       `Leave admin access to "${s.name}"?\n\n` +
       `If you're the last remaining admin, the channel gets permanently deleted from Telegram. If other admins still have it, it just stays and you simply lose your own access.`
     )) return;
+    const pw = prompt(`Type your password to confirm removing "${s.name}":`);
+    if (pw === null) return;
+    if (pw !== currentUser.password) { alert('Wrong password — nothing was removed.'); return; }
     try {
       const payload = { chatId: s.chatId };
       if (currentUser.isAdmin) payload.adminHash = await sha256(currentUser.password);
