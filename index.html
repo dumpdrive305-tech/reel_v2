@@ -694,10 +694,6 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="#ff2442" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
       Delete this video
     </button>
-    <button class="video-opt-btn danger-all" onclick="deleteAllVideos()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#ff6b6b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="4" y1="4" x2="20" y2="20"/></svg>
-      Delete all videos in this group
-    </button>
     <button class="video-opt-btn cancel" onclick="closeVideoOpts()">
       Cancel
     </button>
@@ -2037,9 +2033,12 @@ async function downloadCurrentVideo() {
 }
 
 async function deleteCurrentVideo() {
-  closeVideoOpts();
   const item = playlist[currentIdx];
   if (!item) return;
+  const label = item.name ? item.name.replace(/\.[^.]+$/,'').replace(/[_-]/g,' ') : 'this video';
+  if (!confirm(`Delete "${label}"? This can't be undone.`)) return;
+  if (!confirm('Are you sure? This will permanently delete it from Telegram too.')) return;
+  closeVideoOpts();
   try {
     const hash = await sha256(currentUser.password);
     const uname = currentUser.isAdmin ? '__admin__' : currentUser.username;
@@ -2069,23 +2068,6 @@ async function deleteCurrentVideo() {
   v.play().catch(()=>{});
   updateUI();
   preloadAhead();
-}
-
-async function deleteAllVideos() {
-  if (!confirm('Delete ALL videos in this group? This cannot be undone.')) return;
-  closeVideoOpts();
-  try {
-    const hash = await sha256(currentUser.password);
-    await fetch(`${WORKER_URL}/delete-all`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: currentUser.username, hash, chatId: currentChatId })
-    });
-  } catch(e) { console.warn('delete-all failed', e); }
-  try { await purgeCachedForChat(currentChatId); } catch(e) {}
-  playlist = [];
-  totalFetched = 0;
-  exitPlayer();
 }
 
 
@@ -2389,6 +2371,7 @@ async function deleteBrowseVideo(idx) {
   const item = browseItems[idx];
   if (!item) return;
   if (!confirm(`Delete "${item.name}"? This can't be undone.`)) return;
+  if (!confirm('Are you sure? This will permanently delete it from Telegram too.')) return;
   try {
     const hash = await sha256(currentUser.password);
     const uname = currentUser.isAdmin ? '__admin__' : currentUser.username;
