@@ -743,27 +743,79 @@ const slotA  = document.getElementById('slotA');
 const slotB  = document.getElementById('slotB');
 
 // ── INIT ──
+// ── HARDWARE / GESTURE BACK BUTTON ──
+// A PWA has no browser history by default, so Android's back button (or
+// the edge-swipe gesture) just exits the app outright instead of closing
+// whatever's open. Seed one history entry and re-arm it after every back
+// press, so back always closes the topmost overlay/screen first — same
+// order the in-app Cancel/Back buttons already follow — and only exits
+// once nothing is left open (matches normal Android app behavior).
+history.pushState({ mrApp: true }, '', location.href);
+window.addEventListener('popstate', () => {
+  closeTopmostUI();
+  history.pushState({ mrApp: true }, '', location.href);
+});
+
+function isOpen(id) {
+  const el = document.getElementById(id);
+  return el && el.classList.contains('open');
+}
+function isShown(id) {
+  const el = document.getElementById(id);
+  return el && !el.classList.contains('hidden');
+}
+
+function closeTopmostUI() {
+  // Overlays/modals first (highest layer)
+  if (isOpen('renameModal'))       { closeRename();       return true; }
+  if (isOpen('videoOptsOverlay'))  { closeVideoOpts();     return true; }
+  if (isOpen('playPromptOverlay')) { closePlayPrompt();    return true; }
+  if (isOpen('shareFormOverlay'))  { closeShareForm();     return true; }
+  if (isOpen('modeOverlay'))       { closeModePicker();    return true; }
+
+  // Then full screens
+  if (isShown('player'))   { exitPlayer(); return true; }
+  if (isShown('browse'))   { exitBrowse(); return true; }
+  if (isShown('settings')) { showHome(); renderDrawer(); return true; }
+
+  // Home / Users panel / Login are top-level — nothing left to close,
+  // so this back press is allowed to actually exit the app.
+  return false;
+}
+
 (async function init() {
+  const saved = localStorage.getItem('mr_saved_session');
+  if (!saved) return;
+
+  let parsed;
+  try { parsed = JSON.parse(saved); } catch(e) { localStorage.removeItem('mr_saved_session'); return; }
+  const { username, password, isAdmin, sessions: cachedSessions } = parsed;
+  if (!username || !password) return;
+
+  const hash = await sha256(password);
+  let freshData = null;
   try {
-    const saved = localStorage.getItem('mr_saved_session');
-    if (saved) {
-      const { username, password, isAdmin } = JSON.parse(saved);
-      if (username && password) {
-        // Re-fetch from the server instead of trusting the cached list —
-        // otherwise a group added in another tab/device never shows up here.
-        const hash = await sha256(password);
-        const { data: freshData } = await apiCall('get');
-        const user = freshData[username];
-        if (user && user.hash === hash) {
-          const rawSessions = user.sessions || [];
-          const decrypted = await Promise.all(rawSessions.map(s => decryptSession(s, password)));
-          currentUser = { username, isGuest: false, isAdmin: !!isAdmin, sessions: decrypted.filter(Boolean), password };
-          if (isAdmin) enterAdminPanel(); else enterApp();
-          return;
-        }
-      }
-    }
+    const res = await apiCall('get');
+    freshData = res.data;
   } catch(e) {
+    // Network failed (likely offline) — NOT a reason to log the person out.
+    // Trust the last-known cached sessions and let them keep using the app;
+    // things like Play/upload will simply fail individually until they're
+    // back online, same as any offline app.
+    currentUser = { username, isGuest: false, isAdmin: !!isAdmin, sessions: cachedSessions || [], password };
+    if (isAdmin) enterAdminPanel(); else enterApp();
+    return;
+  }
+
+  // We're online — verify for real. Only NOW is it safe to log out on a
+  // genuine mismatch (wrong/changed password, deleted account, etc).
+  const user = freshData[username];
+  if (user && user.hash === hash) {
+    const rawSessions = user.sessions || [];
+    const decrypted = await Promise.all(rawSessions.map(s => decryptSession(s, password)));
+    currentUser = { username, isGuest: false, isAdmin: !!isAdmin, sessions: decrypted.filter(Boolean), password };
+    if (isAdmin) enterAdminPanel(); else enterApp();
+  } else {
     localStorage.removeItem('mr_saved_session');
   }
 })();
@@ -1077,6 +1129,7 @@ function enterApp() {
       localStorage.setItem('mr_saved_session', JSON.stringify({
         username: currentUser.username,
         password: currentUser.password,
+        sessions: currentUser.sessions,
         isAdmin: false
       }));
     } catch(e) {}
@@ -1094,6 +1147,7 @@ function enterAdminPanel() {
     localStorage.setItem('mr_saved_session', JSON.stringify({
       username: '__admin__',
       password: currentUser.password,
+      sessions: currentUser.sessions,
       isAdmin: true
     }));
   } catch(e) {}
@@ -1700,7 +1754,7 @@ async function changeAdminPassword() {
     await apiCall('admin-change-password', { oldHash, newHash, updatedUsers });
     currentUser.password = newPass;
     try {
-      localStorage.setItem('mr_saved_session', JSON.stringify({ username: '__admin__', password: newPass, isAdmin: true }));
+      localStorage.setItem('mr_saved_session', JSON.stringify({ username: '__admin__', password: newPass, sessions: currentUser.sessions, isAdmin: true }));
     } catch(e) {}
     document.getElementById('adminOldPass').value = '';
     document.getElementById('adminNewPass').value = '';
